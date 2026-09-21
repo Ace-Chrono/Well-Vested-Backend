@@ -22,5 +22,5 @@ public interface TransactionService {
             UUID transactionId
     );
     void deleteTransaction(UUID transactionId);
-    void syncTransactions(String accessToken, String cursor);
+    void syncTransactions();
 }

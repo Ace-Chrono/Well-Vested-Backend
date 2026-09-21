@@ -3,6 +3,8 @@ package com.example.backend.transaction.service.impls;
 import com.example.backend.plaid.PlaidClient;
 import com.example.backend.plaid.dto.PlaidTransactionDto;
 import com.example.backend.plaid.dto.PlaidTransactionSyncDto;
+import com.example.backend.plaid.entity.PlaidItem;
+import com.example.backend.plaid.repository.PlaidItemRepository;
 import com.example.backend.transaction.TransactionRepository;
 import com.example.backend.transaction.dto.TransactionCreateRequestDTO;
 import com.example.backend.transaction.dto.TransactionFilterRequestDTO;
@@ -26,6 +28,7 @@ public class TransactionServiceImpl implements TransactionService {
     private final TransactionRepository transactionRepository;
     private final TransactionMapper transactionMapper;
     private final PlaidClient plaidClient;
+    private final PlaidItemRepository plaidItemRepository;
 
     @Override
     public TransactionResponseDTO saveTransaction(TransactionCreateRequestDTO dto) {
@@ -74,45 +77,76 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
   @Override
-  public void syncTransactions(String accessToken, String cursor) {
+  public void syncTransactions() {
 
-    PlaidTransactionSyncDto sync =
-        plaidClient.syncTransactions(accessToken, cursor);
+    PlaidItem item = plaidItemRepository.findFirstBy()
+        .orElseThrow(() ->
+            new EntityNotFoundException("No Plaid item connected")
+        );
 
-    // Added transactions
-    for (PlaidTransactionDto plaid : sync.getAdded()) {
+    String cursor = item.getTransactionCursor();
 
-      Transaction entity = transactionMapper.toEntity(plaid);
-      entity.setPlaidTransactionId(plaid.getTransactionId());
+    boolean hasMore;
 
-      transactionRepository.save(entity);
-    }
+    do {
+      PlaidTransactionSyncDto sync =
+          plaidClient.syncTransactions(
+              item.getAccessToken(),
+              cursor
+          );
 
-    // Modified transactions
-    for (PlaidTransactionDto plaid : sync.getModified()) {
+      // Added
+      for (PlaidTransactionDto plaid : sync.getAdded()) {
 
-      transactionRepository
-          .findByPlaidTransactionId(plaid.getTransactionId())
-          .ifPresent(existing -> {
+        Transaction entity =
+            transactionMapper.toEntity(plaid);
 
-            Transaction entity = transactionMapper.toEntity(plaid);
+        entity.setPlaidTransactionId(
+            plaid.getTransactionId()
+        );
 
-            // Preserve our internal identity
-            entity.setTransactionId(existing.getTransactionId());
+        transactionRepository.save(entity);
+      }
 
-            // Preserve Plaid's external identity
-            entity.setPlaidTransactionId(plaid.getTransactionId());
+      // Modified
+      for (PlaidTransactionDto plaid : sync.getModified()) {
 
-            transactionRepository.save(entity);
-          });
-    }
+        transactionRepository
+            .findByPlaidTransactionId(plaid.getTransactionId())
+            .ifPresent(existing -> {
 
-    // Removed transactions
-    for (String plaidTransactionId : sync.getRemovedTransactionIds()) {
+              Transaction entity =
+                  transactionMapper.toEntity(plaid);
 
-      transactionRepository
-          .findByPlaidTransactionId(plaidTransactionId)
-          .ifPresent(transactionRepository::delete);
-    }
+              // Keep our internal UUID
+              entity.setTransactionId(
+                  existing.getTransactionId()
+              );
+
+              entity.setPlaidTransactionId(
+                  plaid.getTransactionId()
+              );
+
+              transactionRepository.save(entity);
+            });
+      }
+
+      // Removed
+      for (String plaidTransactionId :
+          sync.getRemovedTransactionIds()) {
+
+        transactionRepository
+            .findByPlaidTransactionId(plaidTransactionId)
+            .ifPresent(transactionRepository::delete);
+      }
+
+      cursor = sync.getNextCursor();
+      hasMore = sync.isHasMore();
+
+    } while (hasMore);
+
+    // Only advance our stored position after all pages succeeded.
+    item.setTransactionCursor(cursor);
+    plaidItemRepository.save(item);
   }
 }

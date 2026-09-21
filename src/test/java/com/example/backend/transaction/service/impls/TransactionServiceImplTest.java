@@ -10,6 +10,8 @@ import com.example.backend.transaction.dto.TransactionResponseDTO;
 import com.example.backend.transaction.dto.TransactionUpdateRequestDTO;
 import com.example.backend.transaction.entity.Transaction;
 import com.example.backend.transaction.mapper.TransactionMapper;
+import com.example.backend.plaid.entity.PlaidItem;
+import com.example.backend.plaid.repository.PlaidItemRepository;
 
 import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,6 +33,9 @@ import static org.mockito.Mockito.*;
 public class TransactionServiceImplTest {
 
   @Mock
+  private PlaidItemRepository plaidItemRepository;
+
+  @Mock
   private TransactionRepository transactionRepository;
 
   @Mock
@@ -42,6 +47,7 @@ public class TransactionServiceImplTest {
   @InjectMocks
   private TransactionServiceImpl transactionService;
 
+  private PlaidItem plaidItem;
   private Transaction transaction;
   private TransactionCreateRequestDTO createDTO;
   private TransactionResponseDTO responseDTO;
@@ -73,6 +79,11 @@ public class TransactionServiceImplTest {
 
     updateDTO = new TransactionUpdateRequestDTO();
     updateDTO.setAmount(100.0);
+
+    plaidItem = new PlaidItem();
+    plaidItem.setPlaidItemId("item_123");
+    plaidItem.setAccessToken("access-token");
+    plaidItem.setTransactionCursor("old-cursor");
   }
 
   // ---------------------------------------------------------
@@ -288,10 +299,9 @@ public class TransactionServiceImplTest {
 
     verify(transactionMapper, times(1))
         .toResponseDTO(transaction);
-  }
-  // ---------------------------------------------------------
-  // PLAID SYNC - ADDED TRANSACTION
-  // ---------------------------------------------------------
+  }// ---------------------------------------------------------
+// PLAID SYNC - ADDED TRANSACTION
+// ---------------------------------------------------------
 
   @Test
   void syncTransactions_shouldInsertAddedTransaction() {
@@ -304,40 +314,50 @@ public class TransactionServiceImplTest {
 
     PlaidTransactionSyncDto syncDto =
         new PlaidTransactionSyncDto(
-            List.of(plaidDto),   // added
-            List.of(),           // modified
-            List.of(),           // removed
+            List.of(plaidDto),
+            List.of(),
+            List.of(),
             "next-cursor",
             false
         );
 
-    when(plaidClient.syncTransactions("access-token", null))
-        .thenReturn(syncDto);
+    when(plaidItemRepository.findFirstBy())
+        .thenReturn(Optional.of(plaidItem));
+
+    when(plaidClient.syncTransactions(
+        "access-token",
+        "old-cursor"
+    )).thenReturn(syncDto);
 
     when(transactionMapper.toEntity(plaidDto))
         .thenReturn(newTransaction);
 
-    transactionService.syncTransactions("access-token", null);
+    transactionService.syncTransactions();
 
     assertEquals(
         plaidTransactionId,
         newTransaction.getPlaidTransactionId()
     );
 
-    // Hibernate would generate this during real persistence.
     assertNull(newTransaction.getTransactionId());
 
-    verify(transactionMapper)
-        .toEntity(plaidDto);
+    // The completed sync should advance the cursor.
+    assertEquals(
+        "next-cursor",
+        plaidItem.getTransactionCursor()
+    );
 
     verify(transactionRepository)
         .save(newTransaction);
+
+    verify(plaidItemRepository)
+        .save(plaidItem);
   }
 
 
-  // ---------------------------------------------------------
-  // PLAID SYNC - MODIFIED TRANSACTION
-  // ---------------------------------------------------------
+// ---------------------------------------------------------
+// PLAID SYNC - MODIFIED TRANSACTION
+// ---------------------------------------------------------
 
   @Test
   void syncTransactions_shouldUpdateModifiedTransaction() {
@@ -350,15 +370,20 @@ public class TransactionServiceImplTest {
 
     PlaidTransactionSyncDto syncDto =
         new PlaidTransactionSyncDto(
-            List.of(),           // added
-            List.of(plaidDto),   // modified
-            List.of(),           // removed
+            List.of(),
+            List.of(plaidDto),
+            List.of(),
             "next-cursor",
             false
         );
 
-    when(plaidClient.syncTransactions("access-token", "old-cursor"))
-        .thenReturn(syncDto);
+    when(plaidItemRepository.findFirstBy())
+        .thenReturn(Optional.of(plaidItem));
+
+    when(plaidClient.syncTransactions(
+        "access-token",
+        "old-cursor"
+    )).thenReturn(syncDto);
 
     when(transactionRepository
         .findByPlaidTransactionId(plaidTransactionId))
@@ -367,10 +392,7 @@ public class TransactionServiceImplTest {
     when(transactionMapper.toEntity(plaidDto))
         .thenReturn(mappedPlaidTransaction);
 
-    transactionService.syncTransactions(
-        "access-token",
-        "old-cursor"
-    );
+    transactionService.syncTransactions();
 
     // Preserve our application's UUID.
     assertEquals(
@@ -384,17 +406,22 @@ public class TransactionServiceImplTest {
         mappedPlaidTransaction.getPlaidTransactionId()
     );
 
-    verify(transactionRepository)
-        .findByPlaidTransactionId(plaidTransactionId);
+    assertEquals(
+        "next-cursor",
+        plaidItem.getTransactionCursor()
+    );
 
     verify(transactionRepository)
         .save(mappedPlaidTransaction);
+
+    verify(plaidItemRepository)
+        .save(plaidItem);
   }
 
 
-  // ---------------------------------------------------------
-  // PLAID SYNC - REMOVED TRANSACTION
-  // ---------------------------------------------------------
+// ---------------------------------------------------------
+// PLAID SYNC - REMOVED TRANSACTION
+// ---------------------------------------------------------
 
   @Test
   void syncTransactions_shouldDeleteRemovedTransaction() {
@@ -408,25 +435,32 @@ public class TransactionServiceImplTest {
             false
         );
 
-    when(plaidClient.syncTransactions("access-token", "old-cursor"))
-        .thenReturn(syncDto);
+    when(plaidItemRepository.findFirstBy())
+        .thenReturn(Optional.of(plaidItem));
+
+    when(plaidClient.syncTransactions(
+        "access-token",
+        "old-cursor"
+    )).thenReturn(syncDto);
 
     when(transactionRepository
         .findByPlaidTransactionId(plaidTransactionId))
         .thenReturn(Optional.of(transaction));
 
-    transactionService.syncTransactions(
-        "access-token",
-        "old-cursor"
-    );
-
-    verify(transactionRepository)
-        .findByPlaidTransactionId(plaidTransactionId);
+    transactionService.syncTransactions();
 
     verify(transactionRepository)
         .delete(transaction);
 
     verify(transactionRepository, never())
         .save(any(Transaction.class));
+
+    assertEquals(
+        "next-cursor",
+        plaidItem.getTransactionCursor()
+    );
+
+    verify(plaidItemRepository)
+        .save(plaidItem);
   }
 }
