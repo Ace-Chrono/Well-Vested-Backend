@@ -9,6 +9,7 @@ import java.util.Optional;
 @Repository
 public interface TransactionRepository extends JpaRepository<Transaction, UUID> {
     Optional<Transaction> findByPlaidTransactionId(String plaidTransactionId);
+    void deleteByPlaidTransactionIdIsNotNull();
 
     /* What the code would have looked like without JPA
     @PersistenceContext

@@ -6,6 +6,8 @@ import com.example.backend.plaid.dto.PlaidTransactionSyncDto;
 import com.example.backend.plaid.entity.PlaidItem;
 import com.example.backend.plaid.repository.PlaidItemRepository;
 import com.example.backend.plaid.service.PlaidService;
+import com.example.backend.transaction.TransactionRepository;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -15,24 +17,27 @@ public class PlaidServiceImpl implements PlaidService {
 
   private final PlaidClient plaidClient;
   private final PlaidItemRepository plaidItemRepository;
+  private final TransactionRepository transactionRepository;
 
   @Override
   public String createLinkToken(String userId) {
     return plaidClient.createLinkToken(userId);
   }
 
-    @Override
+  @Transactional
+  @Override
   public void exchangePublicToken(String publicToken) {
 
     PlaidTokenExchangeDto exchange =
         plaidClient.exchangeToken(publicToken);
 
-    PlaidItem item = new PlaidItem();
+    PlaidItem item = plaidItemRepository.findFirstBy()
+        .orElseGet(PlaidItem::new);
+
+    transactionRepository.deleteByPlaidTransactionIdIsNotNull();
 
     item.setPlaidItemId(exchange.getItemId());
     item.setAccessToken(exchange.getAccessToken());
-
-    // No transaction sync has happened yet.
     item.setTransactionCursor(null);
 
     plaidItemRepository.save(item);
