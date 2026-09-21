@@ -6,6 +6,7 @@ import com.example.backend.transaction.dto.TransactionResponseDTO;
 import com.example.backend.transaction.dto.TransactionUpdateRequestDTO;
 import com.example.backend.transaction.entity.Transaction;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 
 import java.util.List;
@@ -16,5 +17,7 @@ public interface TransactionMapper {
     TransactionResponseDTO toResponseDTO(Transaction entity);
     List<TransactionResponseDTO> toResponseDTOList(List<Transaction> transactions);
     void updateTransactionFromDto(TransactionUpdateRequestDTO dto, @MappingTarget Transaction entity);
+    @Mapping(target = "transactionId", ignore = true)
+    @Mapping(target = "plaidTransactionId", source = "transactionId")
     Transaction toEntity(PlaidTransactionDto dto);
 }
