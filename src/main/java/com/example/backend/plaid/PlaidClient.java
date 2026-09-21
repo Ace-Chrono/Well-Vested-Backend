@@ -1,5 +1,6 @@
 package com.example.backend.plaid;
 
+import com.example.backend.plaid.dto.PlaidTokenExchangeDto;
 import com.example.backend.plaid.dto.PlaidTransactionDto;
 import com.example.backend.plaid.dto.PlaidTransactionSyncDto;
 import com.plaid.client.model.*;
@@ -42,7 +43,7 @@ public class PlaidClient {
     }
   }
 
-  public String exchangeToken(String publicToken) {
+  public PlaidTokenExchangeDto exchangeToken(String publicToken) {
 
     ItemPublicTokenExchangeRequest request =
         new ItemPublicTokenExchangeRequest()
@@ -53,13 +54,23 @@ public class PlaidClient {
           plaidApi.itemPublicTokenExchange(request).execute();
 
       if (!response.isSuccessful() || response.body() == null) {
-        throw new RuntimeException("Failed to exchange Plaid public token");
+        throw new RuntimeException(
+            "Failed to exchange Plaid public token"
+        );
       }
 
-      return response.body().getAccessToken();
+      ItemPublicTokenExchangeResponse body = response.body();
+
+      return new PlaidTokenExchangeDto(
+          body.getAccessToken(),
+          body.getItemId()
+      );
 
     } catch (Exception e) {
-      throw new RuntimeException("Plaid token exchange error", e);
+      throw new RuntimeException(
+          "Plaid token exchange error",
+          e
+      );
     }
   }
 
@@ -145,6 +156,38 @@ public class PlaidClient {
 
     } catch (Exception e) {
       throw new RuntimeException("Error removing item", e);
+    }
+  }
+
+  public String createSandboxPublicToken() {
+
+    SandboxPublicTokenCreateRequest request =
+        new SandboxPublicTokenCreateRequest()
+            .institutionId("ins_109508")
+            .initialProducts(List.of(Products.TRANSACTIONS))
+            .options(
+                new SandboxPublicTokenCreateRequestOptions()
+                    .overrideUsername("user_good")
+                    .overridePassword("pass_good")
+            );
+
+    try {
+      Response<SandboxPublicTokenCreateResponse> response =
+          plaidApi.sandboxPublicTokenCreate(request).execute();
+
+      if (!response.isSuccessful() || response.body() == null) {
+        throw new RuntimeException(
+            "Failed to create sandbox public token"
+        );
+      }
+
+      return response.body().getPublicToken();
+
+    } catch (Exception e) {
+      throw new RuntimeException(
+          "Plaid sandbox public token error",
+          e
+      );
     }
   }
 }

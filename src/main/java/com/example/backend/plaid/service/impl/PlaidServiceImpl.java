@@ -1,7 +1,10 @@
 package com.example.backend.plaid.service.impl;
 
 import com.example.backend.plaid.PlaidClient;
+import com.example.backend.plaid.dto.PlaidTokenExchangeDto;
 import com.example.backend.plaid.dto.PlaidTransactionSyncDto;
+import com.example.backend.plaid.entity.PlaidItem;
+import com.example.backend.plaid.repository.PlaidItemRepository;
 import com.example.backend.plaid.service.PlaidService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -11,15 +14,28 @@ import org.springframework.stereotype.Service;
 public class PlaidServiceImpl implements PlaidService {
 
   private final PlaidClient plaidClient;
+  private final PlaidItemRepository plaidItemRepository;
 
   @Override
   public String createLinkToken(String userId) {
     return plaidClient.createLinkToken(userId);
   }
 
-  @Override
-  public String exchangePublicToken(String publicToken) {
-    return plaidClient.exchangeToken(publicToken);
+    @Override
+  public void exchangePublicToken(String publicToken) {
+
+    PlaidTokenExchangeDto exchange =
+        plaidClient.exchangeToken(publicToken);
+
+    PlaidItem item = new PlaidItem();
+
+    item.setPlaidItemId(exchange.getItemId());
+    item.setAccessToken(exchange.getAccessToken());
+
+    // No transaction sync has happened yet.
+    item.setTransactionCursor(null);
+
+    plaidItemRepository.save(item);
   }
 
   @Override

@@ -62,10 +62,7 @@ public class TransactionController {
 
     @PostMapping("/sync")
     @ResponseStatus(HttpStatus.OK)
-    public void syncTransactions(
-            @RequestParam String accessToken,
-            @RequestParam String cursor
-    ) {
-        transactionService.syncTransactions(accessToken, cursor);
+    public void syncTransactions() {
+        transactionService.syncTransactions();
     }
 }
