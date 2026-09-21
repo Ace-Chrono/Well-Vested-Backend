@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Entity
 @Table(name = "transactions")
@@ -17,7 +18,9 @@ import java.time.LocalDate;
 @AllArgsConstructor
 public class Transaction {
     @Id
-    private String transactionId;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID transactionId;
+    private String plaidTransactionId;
     private String accountId;
     private Double amount;
     private String isoCurrencyCode;

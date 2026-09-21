@@ -6,12 +6,13 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Getter
 @Setter
 @NoArgsConstructor
 public class TransactionResponseDTO {
-    private String transactionId;
+    private UUID transactionId;
     private String accountId;
     private Double amount;
     private String isoCurrencyCode;

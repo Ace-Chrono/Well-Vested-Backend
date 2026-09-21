@@ -2,6 +2,7 @@ package com.example.backend.transaction.service.impls;
 
 import com.example.backend.plaid.PlaidClient;
 import com.example.backend.plaid.dto.PlaidTransactionDto;
+import com.example.backend.plaid.dto.PlaidTransactionSyncDto;
 import com.example.backend.transaction.TransactionRepository;
 import com.example.backend.transaction.dto.TransactionCreateRequestDTO;
 import com.example.backend.transaction.dto.TransactionFilterRequestDTO;
@@ -14,7 +15,9 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -35,7 +38,7 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
-    public TransactionResponseDTO getTransactionById(String transactionId) {
+    public TransactionResponseDTO getTransactionById(UUID transactionId) {
 
         Transaction entity = transactionRepository.findById(transactionId).orElseThrow(() -> new EntityNotFoundException("Transaction not found"));
 
@@ -45,11 +48,11 @@ public class TransactionServiceImpl implements TransactionService {
     @Override
     public List<TransactionResponseDTO> getTransactions(TransactionFilterRequestDTO filter) {
 
-        return transactionRepository.findAll().stream().filter(t -> filter.getStartDate() == null || !t.getDate().isBefore(filter.getStartDate())).filter(t -> filter.getEndDate() == null || !t.getDate().isAfter(filter.getEndDate())).filter(t -> filter.getMerchantName() == null || (t.getMerchantName() != null && t.getMerchantName().toLowerCase().contains(filter.getMerchantName().toLowerCase()))).filter(t -> filter.getPaymentChannel() == null || filter.getPaymentChannel().equalsIgnoreCase(t.getPaymentChannel())).filter(t -> filter.getMinAmount() == null || t.getAmount() >= filter.getMinAmount()).filter(t -> filter.getMaxAmount() == null || t.getAmount() <= filter.getMaxAmount()).filter(t -> filter.getPersonalFinanceCategoryPrimary() == null || (t.getPersonalFinanceCategory() != null && filter.getPersonalFinanceCategoryPrimary().equalsIgnoreCase(t.getPersonalFinanceCategory().getPrimary()))).map(transactionMapper::toResponseDTO).toList();
+        return transactionRepository.findAll().stream().filter(t -> filter.getStartDate() == null || !t.getDate().isBefore(filter.getStartDate())).filter(t -> filter.getEndDate() == null || !t.getDate().isAfter(filter.getEndDate())).filter(t -> filter.getMerchantName() == null || (t.getMerchantName() != null && t.getMerchantName().toLowerCase().contains(filter.getMerchantName().toLowerCase()))).filter(t -> filter.getPaymentChannel() == null || filter.getPaymentChannel().equalsIgnoreCase(t.getPaymentChannel())).filter(t -> filter.getMinAmount() == null || t.getAmount() >= filter.getMinAmount()).filter(t -> filter.getMaxAmount() == null || t.getAmount() <= filter.getMaxAmount()).filter(t -> filter.getPersonalFinanceCategoryPrimary() == null || (t.getPersonalFinanceCategory() != null && filter.getPersonalFinanceCategoryPrimary().equalsIgnoreCase(t.getPersonalFinanceCategory().getPrimaryCategory()))).map(transactionMapper::toResponseDTO).toList();
     }
 
     @Override
-    public TransactionResponseDTO updateTransaction(TransactionUpdateRequestDTO dto, String transactionId) {
+    public TransactionResponseDTO updateTransaction(TransactionUpdateRequestDTO dto, UUID transactionId) {
 
         Transaction entity = transactionRepository.findById(transactionId).orElseThrow(() -> new EntityNotFoundException("Transaction not found"));
 
@@ -61,7 +64,7 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
-    public void deleteTransaction(String transactionId) {
+    public void deleteTransaction(UUID transactionId) {
 
         if (!transactionRepository.existsById(transactionId)) {
             throw new EntityNotFoundException("Transaction not found");
@@ -70,24 +73,46 @@ public class TransactionServiceImpl implements TransactionService {
         transactionRepository.deleteById(transactionId);
     }
 
-    @Override
-    public void syncTransactions(String accessToken) {
+  @Override
+  public void syncTransactions(String accessToken, String cursor) {
 
-        List<PlaidTransactionDto> plaidTransactions = plaidClient.fetchTransactions(accessToken, "2024-01-01", "2026-01-01");
+    PlaidTransactionSyncDto sync =
+        plaidClient.syncTransactions(accessToken, cursor);
 
-        for (PlaidTransactionDto plaid : plaidTransactions) {
+    // Added transactions
+    for (PlaidTransactionDto plaid : sync.getAdded()) {
+
+      Transaction entity = transactionMapper.toEntity(plaid);
+      entity.setPlaidTransactionId(plaid.getTransactionId());
+
+      transactionRepository.save(entity);
+    }
+
+    // Modified transactions
+    for (PlaidTransactionDto plaid : sync.getModified()) {
+
+      transactionRepository
+          .findByPlaidTransactionId(plaid.getTransactionId())
+          .ifPresent(existing -> {
 
             Transaction entity = transactionMapper.toEntity(plaid);
 
-            transactionRepository.findById(plaid.getTransactionId()).ifPresentOrElse(existing -> {
-                // update path
-                entity.setTransactionId(existing.getTransactionId());
-                transactionRepository.save(entity);
-            }, () -> {
-                // insert path
-                entity.setTransactionId(plaid.getTransactionId());
-                transactionRepository.save(entity);
-            });
-        }
+            // Preserve our internal identity
+            entity.setTransactionId(existing.getTransactionId());
+
+            // Preserve Plaid's external identity
+            entity.setPlaidTransactionId(plaid.getTransactionId());
+
+            transactionRepository.save(entity);
+          });
     }
+
+    // Removed transactions
+    for (String plaidTransactionId : sync.getRemovedTransactionIds()) {
+
+      transactionRepository
+          .findByPlaidTransactionId(plaidTransactionId)
+          .ifPresent(transactionRepository::delete);
+    }
+  }
 }

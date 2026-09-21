@@ -3,9 +3,13 @@ package com.example.backend.transaction;
 import com.example.backend.transaction.entity.Transaction;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
+import java.util.UUID;
+import java.util.Optional;
 
 @Repository
-public interface TransactionRepository extends JpaRepository<Transaction, String> {
+public interface TransactionRepository extends JpaRepository<Transaction, UUID> {
+    Optional<Transaction> findByPlaidTransactionId(String plaidTransactionId);
+
     /* What the code would have looked like without JPA
     @PersistenceContext
     private EntityManager entityManager;

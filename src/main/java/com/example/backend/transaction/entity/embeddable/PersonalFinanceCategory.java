@@ -1,5 +1,6 @@
 package com.example.backend.transaction.entity.embeddable;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import lombok.Getter;
 import lombok.Setter;
@@ -12,7 +13,7 @@ import lombok.AllArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class PersonalFinanceCategory {
-    private String primary;
+    private String primaryCategory;
     private String detailed;
     private String confidenceLevel;
 }

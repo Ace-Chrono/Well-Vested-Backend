@@ -6,6 +6,7 @@ import com.example.backend.transaction.dto.TransactionResponseDTO;
 import com.example.backend.transaction.dto.TransactionUpdateRequestDTO;
 
 import java.util.List;
+import java.util.UUID;
 
 public interface TransactionService {
     /*
@@ -14,12 +15,12 @@ public interface TransactionService {
      */
 
     TransactionResponseDTO saveTransaction(TransactionCreateRequestDTO dto);
-    TransactionResponseDTO getTransactionById(String transactionId);
+    TransactionResponseDTO getTransactionById(UUID transactionId);
     List<TransactionResponseDTO> getTransactions(TransactionFilterRequestDTO filter);
     TransactionResponseDTO updateTransaction(
             TransactionUpdateRequestDTO dto,
-            String transactionId
+            UUID transactionId
     );
-    void deleteTransaction(String transactionId);
-    void syncTransactions(String accessToken);
+    void deleteTransaction(UUID transactionId);
+    void syncTransactions(String accessToken, String cursor);
 }
