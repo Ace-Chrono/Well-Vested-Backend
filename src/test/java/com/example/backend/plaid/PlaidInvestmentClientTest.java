@@ -44,4 +44,36 @@ class PlaidInvestmentClientTest {
             .securities(List.of())));
         assertThrows(RuntimeException.class, () -> new PlaidClient(api).getInvestmentHoldings("access"));
     }
+    @Test
+    void reportsPlaidStatusCodeAndRequestIdWithoutRawErrorMessage() throws Exception {
+        PlaidApi api = mock(PlaidApi.class);
+        Call<InvestmentsHoldingsGetResponse> call = mock(Call.class);
+        when(api.investmentsHoldingsGet(any())).thenReturn(call);
+        when(call.execute()).thenReturn(Response.error(400, okhttp3.ResponseBody.create(
+            okhttp3.MediaType.get("application/json"),
+            "{\"error_code\":\"NO_INVESTMENT_ACCOUNTS\",\"error_type\":\"ITEM_ERROR\","
+                + "\"request_id\":\"request-123\",\"error_message\":\"sensitive details\"}")));
+        RuntimeException error = assertThrows(RuntimeException.class,
+            () -> new PlaidClient(api).getInvestmentHoldings("secret-access-token"));
+        assertTrue(error.getMessage().contains("HTTP 400"));
+        assertTrue(error.getMessage().contains("NO_INVESTMENT_ACCOUNTS"));
+        assertTrue(error.getMessage().contains("request-123"));
+        assertFalse(error.getMessage().contains("sensitive details"));
+        assertFalse(error.getMessage().contains("secret-access-token"));
+    }
+
+    @Test
+    void nonJsonUpstreamErrorsStillReportHttpStatus() throws Exception {
+        PlaidApi api = mock(PlaidApi.class);
+        Call<InvestmentsHoldingsGetResponse> call = mock(Call.class);
+        when(api.investmentsHoldingsGet(any())).thenReturn(call);
+        when(call.execute()).thenReturn(Response.error(502, okhttp3.ResponseBody.create(
+            okhttp3.MediaType.get("text/html"), "<html>upstream error</html>")));
+        RuntimeException error = assertThrows(RuntimeException.class,
+            () -> new PlaidClient(api).getInvestmentHoldings("access"));
+        assertTrue(error.getMessage().contains("HTTP 502"));
+        assertTrue(error.getMessage().contains("error_code=UNKNOWN"));
+        assertFalse(error.getMessage().contains("<html>"));
+    }
+
 }

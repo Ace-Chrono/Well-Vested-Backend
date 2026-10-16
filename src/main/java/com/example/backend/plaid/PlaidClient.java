@@ -11,12 +11,16 @@ import com.example.backend.plaid.dto.PlaidTransactionSyncDto;
 import com.plaid.client.model.*;
 import com.plaid.client.request.PlaidApi;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.springframework.stereotype.Component;
 import retrofit2.Response;
 
 import java.util.List;
 
 @Component
+@Slf4j
 @RequiredArgsConstructor
 public class PlaidClient {
 
@@ -167,7 +171,7 @@ public class PlaidClient {
           plaidApi.investmentsHoldingsGet(request).execute();
 
       if (!response.isSuccessful() || response.body() == null) {
-        throw new RuntimeException("Failed to fetch Plaid investment holdings");
+        throw investmentHoldingsError(response);
       }
 
       InvestmentsHoldingsGetResponse body = response.body();
@@ -188,8 +192,35 @@ public class PlaidClient {
             holding.getQuantity(), holding.getInstitutionPrice(), holding.getIsoCurrencyCode());
       }).toList();
     } catch (Exception e) {
-      throw new RuntimeException("Error fetching investment holdings", e);
+      throw new RuntimeException("Error fetching investment holdings: " + e.getMessage(), e);
     }
+  }
+
+  private RuntimeException investmentHoldingsError(Response<?> response) {
+    String code = "UNKNOWN";
+    String type = "UNKNOWN";
+    String requestId = "UNKNOWN";
+    if (response.errorBody() != null) {
+      try (var errorBody = response.errorBody()) {
+        JsonObject error = JsonParser.parseString(errorBody.string()).getAsJsonObject();
+        code = safeErrorField(error, "error_code");
+        type = safeErrorField(error, "error_type");
+        requestId = safeErrorField(error, "request_id");
+      } catch (Exception ignored) {
+        // Non-JSON errors still report HTTP status. Never log the raw response body.
+      }
+    }
+    String detail = "Plaid investments/holdings/get failed: HTTP " + response.code()
+        + ", error_code=" + code + ", error_type=" + type + ", request_id=" + requestId;
+    log.warn("{}", detail);
+    return new IllegalStateException(detail);
+  }
+
+  private String safeErrorField(JsonObject error, String field) {
+    if (!error.has(field) || !error.get(field).isJsonPrimitive()
+        || !error.getAsJsonPrimitive(field).isString()) return "UNKNOWN";
+    String value = error.get(field).getAsString();
+    return value.matches("[A-Za-z0-9_-]{1,100}") ? value : "UNKNOWN";
   }
 
   private AssetType toAssetType(String type) {

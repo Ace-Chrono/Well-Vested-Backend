@@ -41,3 +41,26 @@ The frontend still uses its existing local mock data. Charts and daily performan
 need additional data and frontend integration.
 
 Plaid reference: https://plaid.com/docs/api/products/investments/
+
+## Comparing two development machines
+
+The direct Sandbox helper enables both Transactions and Investments. The frontend
+Link flow requests Transactions with optional Investments; successful Link alone
+does not guarantee that the selected institution/accounts provide investment data.
+Both use the same token exchange, which replaces the single locally saved Item.
+Each local PostgreSQL database may contain a different Item or an older connection.
+
+For a comparable Sandbox test, on the failing machine create a token through
+POST `/api/test/plaid/public-token`, exchange that token through POST
+`/api/plaid/exchange?publicToken=...`, then POST `/api/investments/sync`.
+Exchange clears imported transactions, investments and insights; use this only
+when intentionally replacing the development connection. Do not copy access tokens
+or credentials between machines.
+
+If it fails, the backend logs HTTP status, error_code, error_type and request_id
+from Plaid. It does not log raw error bodies or access tokens. Check the exact code
+against https://plaid.com/docs/errors/item/ rather than assuming authorization.
+NO_INVESTMENT_ACCOUNTS indicates no eligible investment accounts on that Item.
+An empty successful holdings list is valid and does not cause the HTTP error branch.
+Also compare source revisions and restart the backend after updating; local builds
+and local database contents are independent of the frontend.

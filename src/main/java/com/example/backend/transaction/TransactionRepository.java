@@ -8,6 +8,9 @@ import java.util.Optional;
 
 @Repository
 public interface TransactionRepository extends JpaRepository<Transaction, UUID> {
+    java.util.List<Transaction> findByIsoCurrencyCodeAndDateBetweenOrderByDateDescTransactionIdAsc(
+        String currency, java.time.LocalDate start, java.time.LocalDate end, org.springframework.data.domain.Pageable pageable);
+
     Optional<Transaction> findByPlaidTransactionId(String plaidTransactionId);
     void deleteByPlaidTransactionIdIsNotNull();
 

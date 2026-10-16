@@ -9,6 +9,8 @@ import java.util.List;
 
 @Repository
 public interface InvestmentRepository extends JpaRepository<Investment, UUID> {
+    List<Investment> findByIsoCurrencyCodeOrderByInvestmentIdAsc(String currency, org.springframework.data.domain.Pageable pageable);
+
     List<Investment> findByPlaidItemId(String plaidItemId);
     void deleteByPlaidItemIdIsNotNull();
 }

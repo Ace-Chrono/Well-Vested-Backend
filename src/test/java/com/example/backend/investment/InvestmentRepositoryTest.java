@@ -25,6 +25,8 @@ import static org.junit.jupiter.api.Assertions.*;
 @Transactional
 class InvestmentRepositoryTest {
     @Autowired private InvestmentRepository repository;
+    @Autowired private com.example.backend.chat.ChatRepository chats;
+    @Autowired private com.example.backend.transaction.TransactionRepository transactions;
     @Autowired private com.example.backend.insight.InsightRepository insights;
     @Autowired private EntityManager entityManager;
     @Autowired private JpaTransactionManager transactionManager;
@@ -71,8 +73,30 @@ class InvestmentRepositoryTest {
         assertTrue(insights.findByScopeAndIsoCurrencyCodeOrderByTypeAscSubjectAsc("SPENDING", "USD").isEmpty());
     }
 
+    @Test
+    void chatPersistsAndReloadsAndContextQueriesInitialize() {
+        var turn = new com.example.backend.chat.entity.ChatTurn();
+        var conversation = java.util.UUID.randomUUID();
+        turn.setConversationId(conversation);
+        turn.setMessage("Explain spending");
+        turn.setReply("No data yet.");
+        turn.setCurrency("USD");
+        turn.setCreatedAt(java.time.Instant.now());
+        chats.saveAndFlush(turn);
+        entityManager.clear();
+        var history = chats.findTop6ByConversationIdOrderByCreatedAtDesc(conversation);
+        assertEquals(1, history.size());
+        assertNotNull(history.get(0).getTurnId());
+        assertEquals("No data yet.", history.get(0).getReply());
+        var page = org.springframework.data.domain.PageRequest.of(0, 100);
+        assertTrue(repository.findByIsoCurrencyCodeOrderByInvestmentIdAsc("USD", page).isEmpty());
+        assertTrue(transactions.findByIsoCurrencyCodeAndDateBetweenOrderByDateDescTransactionIdAsc(
+            "USD", java.time.LocalDate.of(2026, 9, 1), java.time.LocalDate.of(2026, 9, 30), page).isEmpty());
+        assertTrue(insights.findByIsoCurrencyCodeOrderByGeneratedAtDescInsightIdAsc("USD", page).isEmpty());
+    }
+
     @Configuration
-    @EnableJpaRepositories(basePackageClasses = {InvestmentRepository.class, com.example.backend.insight.InsightRepository.class})
+    @EnableJpaRepositories(basePackageClasses = {InvestmentRepository.class, com.example.backend.insight.InsightRepository.class, com.example.backend.chat.ChatRepository.class, com.example.backend.transaction.TransactionRepository.class})
     @EnableTransactionManagement
     static class Config {
         @Bean
@@ -84,7 +108,7 @@ class InvestmentRepositoryTest {
         LocalContainerEntityManagerFactoryBean entityManagerFactory(DataSource dataSource) {
             LocalContainerEntityManagerFactoryBean factory = new LocalContainerEntityManagerFactoryBean();
             factory.setDataSource(dataSource);
-            factory.setPackagesToScan(Investment.class.getPackageName(), "com.example.backend.insight.entity");
+            factory.setPackagesToScan(Investment.class.getPackageName(), "com.example.backend.insight.entity", "com.example.backend.chat.entity", "com.example.backend.transaction.entity");
             factory.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
             factory.setJpaPropertyMap(Map.of("hibernate.hbm2ddl.auto", "create-drop"));
             return factory;

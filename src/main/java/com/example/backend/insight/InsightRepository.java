@@ -8,6 +8,8 @@ import java.util.UUID;
 
 @Repository
 public interface InsightRepository extends JpaRepository<Insight, UUID> {
+    List<Insight> findByIsoCurrencyCodeOrderByGeneratedAtDescInsightIdAsc(String currency, org.springframework.data.domain.Pageable pageable);
+
     List<Insight> findByScopeAndIsoCurrencyCodeOrderByTypeAscSubjectAsc(String scope, String isoCurrencyCode);
     void deleteByScopeAndIsoCurrencyCode(String scope, String isoCurrencyCode);
 }
