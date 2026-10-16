@@ -1,5 +1,6 @@
 package com.example.backend.plaid.service.impl;
 
+import com.example.backend.investment.InvestmentRepository;
 import com.example.backend.plaid.PlaidClient;
 import com.example.backend.plaid.dto.PlaidTokenExchangeDto;
 import com.example.backend.plaid.dto.PlaidTransactionSyncDto;
@@ -18,6 +19,7 @@ public class PlaidServiceImpl implements PlaidService {
   private final PlaidClient plaidClient;
   private final PlaidItemRepository plaidItemRepository;
   private final TransactionRepository transactionRepository;
+  private final InvestmentRepository investmentRepository;
 
   @Override
   public String createLinkToken(String userId) {
@@ -35,6 +37,7 @@ public class PlaidServiceImpl implements PlaidService {
         .orElseGet(PlaidItem::new);
 
     transactionRepository.deleteByPlaidTransactionIdIsNotNull();
+    investmentRepository.deleteByPlaidItemIdIsNotNull();
 
     item.setPlaidItemId(exchange.getItemId());
     item.setAccessToken(exchange.getAccessToken());

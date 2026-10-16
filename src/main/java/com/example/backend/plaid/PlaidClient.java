@@ -1,5 +1,10 @@
 package com.example.backend.plaid;
 
+import com.example.backend.plaid.dto.PlaidInvestmentHoldingDto;
+import com.example.backend.investment.entity.AssetType;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import com.example.backend.plaid.dto.PlaidTokenExchangeDto;
 import com.example.backend.plaid.dto.PlaidTransactionDto;
 import com.example.backend.plaid.dto.PlaidTransactionSyncDto;
@@ -26,7 +31,8 @@ public class PlaidClient {
             .countryCodes(List.of(CountryCode.US))
             .user(new LinkTokenCreateRequestUser()
                 .clientUserId(userId))
-            .products(List.of(Products.TRANSACTIONS));
+            .products(List.of(Products.TRANSACTIONS))
+            .optionalProducts(List.of(Products.INVESTMENTS));
 
     try {
       Response<LinkTokenCreateResponse> response =
@@ -145,6 +151,54 @@ public class PlaidClient {
     );
   }
 
+  public List<PlaidInvestmentHoldingDto> getInvestmentHoldings(String accessToken) {
+    InvestmentsHoldingsGetRequest request = new InvestmentsHoldingsGetRequest()
+        .accessToken(accessToken);
+
+    try {
+      Response<InvestmentsHoldingsGetResponse> response =
+          plaidApi.investmentsHoldingsGet(request).execute();
+
+      if (!response.isSuccessful() || response.body() == null) {
+        throw new RuntimeException("Failed to fetch Plaid investment holdings");
+      }
+
+      InvestmentsHoldingsGetResponse body = response.body();
+      if (body.getHoldings() == null || body.getSecurities() == null) {
+        throw new IllegalStateException("Incomplete Plaid holdings response");
+      }
+      Map<String, Security> securities = body.getSecurities().stream()
+          .collect(Collectors.toMap(Security::getSecurityId, Function.identity()));
+
+      return body.getHoldings().stream().map(holding -> {
+        Security security = securities.get(holding.getSecurityId());
+        if (security == null || holding.getAccountId() == null || holding.getSecurityId() == null) {
+          throw new IllegalStateException("Plaid holding is missing account or security information");
+        }
+        return new PlaidInvestmentHoldingDto(
+            holding.getAccountId(), holding.getSecurityId(), security.getTickerSymbol(),
+            security.getName(), toAssetType(security.getType()),
+            holding.getQuantity(), holding.getInstitutionPrice(), holding.getIsoCurrencyCode());
+      }).toList();
+    } catch (Exception e) {
+      throw new RuntimeException("Error fetching investment holdings", e);
+    }
+  }
+
+  private AssetType toAssetType(String type) {
+    if (type == null) return AssetType.OTHER;
+    return switch (type) {
+      case "equity" -> AssetType.STOCK;
+      case "cryptocurrency" -> AssetType.CRYPTO;
+      case "etf" -> AssetType.ETF;
+      case "mutual fund" -> AssetType.MUTUAL_FUND;
+      case "bond" -> AssetType.BOND;
+      case "cash" -> AssetType.CASH;
+      case "option" -> AssetType.OPTION;
+      default -> AssetType.OTHER;
+    };
+  }
+
   public void removeItem(String accessToken) {
 
     ItemRemoveRequest request =
@@ -164,7 +218,7 @@ public class PlaidClient {
     SandboxPublicTokenCreateRequest request =
         new SandboxPublicTokenCreateRequest()
             .institutionId("ins_109508")
-            .initialProducts(List.of(Products.TRANSACTIONS))
+            .initialProducts(List.of(Products.TRANSACTIONS, Products.INVESTMENTS))
             .options(
                 new SandboxPublicTokenCreateRequestOptions()
                     .overrideUsername("user_good")
