@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @Transactional
 class InvestmentRepositoryTest {
     @Autowired private InvestmentRepository repository;
+    @Autowired private com.example.backend.insight.InsightRepository insights;
     @Autowired private EntityManager entityManager;
     @Autowired private JpaTransactionManager transactionManager;
 
@@ -48,8 +49,30 @@ class InvestmentRepositoryTest {
         assertFalse(repository.existsById(saved.getInvestmentId()));
     }
 
+    @Test
+    void persistsAndReplacesInsightSnapshotsByScopeAndCurrency() {
+        com.example.backend.insight.entity.Insight insight = new com.example.backend.insight.entity.Insight();
+        insight.setScope("SPENDING");
+        insight.setType("SPENDING_TOTAL");
+        insight.setIsoCurrencyCode("USD");
+        insight.setValue(123.45);
+        insight.setGeneratedAt(java.time.Instant.now());
+        insights.saveAndFlush(insight);
+        entityManager.clear();
+        var loaded = insights.findByScopeAndIsoCurrencyCodeOrderByTypeAscSubjectAsc("SPENDING", "USD");
+        assertEquals(1, loaded.size());
+        assertEquals(123.45, loaded.get(0).getValue());
+        assertNotNull(loaded.get(0).getInsightId());
+        insights.deleteByScopeAndIsoCurrencyCode("SPENDING", "EUR");
+        assertEquals(1, insights.count());
+        insights.deleteByScopeAndIsoCurrencyCode("SPENDING", "USD");
+        insights.flush();
+        entityManager.clear();
+        assertTrue(insights.findByScopeAndIsoCurrencyCodeOrderByTypeAscSubjectAsc("SPENDING", "USD").isEmpty());
+    }
+
     @Configuration
-    @EnableJpaRepositories(basePackageClasses = InvestmentRepository.class)
+    @EnableJpaRepositories(basePackageClasses = {InvestmentRepository.class, com.example.backend.insight.InsightRepository.class})
     @EnableTransactionManagement
     static class Config {
         @Bean
@@ -61,7 +84,7 @@ class InvestmentRepositoryTest {
         LocalContainerEntityManagerFactoryBean entityManagerFactory(DataSource dataSource) {
             LocalContainerEntityManagerFactoryBean factory = new LocalContainerEntityManagerFactoryBean();
             factory.setDataSource(dataSource);
-            factory.setPackagesToScan(Investment.class.getPackageName());
+            factory.setPackagesToScan(Investment.class.getPackageName(), "com.example.backend.insight.entity");
             factory.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
             factory.setJpaPropertyMap(Map.of("hibernate.hbm2ddl.auto", "create-drop"));
             return factory;

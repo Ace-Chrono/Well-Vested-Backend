@@ -137,7 +137,7 @@ public class PlaidClient {
   }
 
   private PlaidTransactionDto toTransactionDto(Transaction txn) {
-    return new PlaidTransactionDto(
+    PlaidTransactionDto dto = new PlaidTransactionDto(
         txn.getTransactionId(),
         txn.getAccountId(),
         txn.getName(),
@@ -147,8 +147,15 @@ public class PlaidClient {
             ? txn.getCategory().get(0)
             : null,
         txn.getMerchantName(),
-        txn.getPending()
+        Boolean.TRUE.equals(txn.getPending())
     );
+    dto.setIsoCurrencyCode(txn.getIsoCurrencyCode());
+    if (txn.getPersonalFinanceCategory() != null) {
+      var category = txn.getPersonalFinanceCategory();
+      dto.setPersonalFinanceCategory(new com.example.backend.transaction.entity.embeddable.PersonalFinanceCategory(
+          category.getPrimary(), category.getDetailed(), category.getConfidenceLevel()));
+    }
+    return dto;
   }
 
   public List<PlaidInvestmentHoldingDto> getInvestmentHoldings(String accessToken) {

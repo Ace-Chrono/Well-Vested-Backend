@@ -20,6 +20,7 @@ public class PlaidServiceImpl implements PlaidService {
   private final PlaidItemRepository plaidItemRepository;
   private final TransactionRepository transactionRepository;
   private final InvestmentRepository investmentRepository;
+  private final com.example.backend.insight.InsightRepository insightRepository;
 
   @Override
   public String createLinkToken(String userId) {
@@ -38,6 +39,7 @@ public class PlaidServiceImpl implements PlaidService {
 
     transactionRepository.deleteByPlaidTransactionIdIsNotNull();
     investmentRepository.deleteByPlaidItemIdIsNotNull();
+    insightRepository.deleteAll();
 
     item.setPlaidItemId(exchange.getItemId());
     item.setAccessToken(exchange.getAccessToken());

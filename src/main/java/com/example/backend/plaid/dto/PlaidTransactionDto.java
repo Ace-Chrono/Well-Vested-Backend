@@ -21,4 +21,18 @@ public class PlaidTransactionDto {
     private String category;
     private String merchantName;
     private boolean pending;
+    private String isoCurrencyCode;
+    private com.example.backend.transaction.entity.embeddable.PersonalFinanceCategory personalFinanceCategory;
+
+    public PlaidTransactionDto(String transactionId, String accountId, String name, Double amount,
+            LocalDate date, String category, String merchantName, boolean pending) {
+        this.transactionId = transactionId;
+        this.accountId = accountId;
+        this.name = name;
+        this.amount = amount;
+        this.date = date;
+        this.category = category;
+        this.merchantName = merchantName;
+        this.pending = pending;
+    }
 }
